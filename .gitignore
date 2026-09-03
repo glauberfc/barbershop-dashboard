@@ -1,0 +1,4 @@
+node_modules
+dist
+.tanstack
+.claude/settings.local.json
