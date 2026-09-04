@@ -1,6 +1,10 @@
 import { http, HttpResponse } from 'msw'
 
+import { appointmentRangeSchema, appointmentSchema } from '@/contract/appointment'
+import { barberSchema } from '@/contract/barber'
+import { customerSchema } from '@/contract/customer'
 import { membershipSchema } from '@/contract/membership'
+import { serviceSchema } from '@/contract/service'
 import { accountSchema, credentialsSchema, sessionSchema } from '@/contract/session'
 import { shopSchema } from '@/contract/shop'
 import { db } from './db'
@@ -34,6 +38,25 @@ function accountForSession(token: string | undefined) {
   }
 
   return db.account.findFirst({ where: { id: { equals: session.accountId } } })
+}
+
+/**
+ * The tenant boundary, shared by every Shop-scoped handler below. `null` means
+ * "answer not found" — whether because the Shop does not exist, the visitor is
+ * signed out, or the Account holds no Membership here — never forbidden, per
+ * the contract decision in ticket #1: a forbidden response would confirm the
+ * Shop exists, which leaks one tenant's existence to another.
+ */
+function shopForAccount(shopId: string, cookies: Record<string, string>) {
+  const account = accountForSession(cookies[SESSION_COOKIE])
+  const shop = db.shop.findFirst({ where: { id: { equals: shopId } } })
+  const membership =
+    account &&
+    db.membership.findFirst({
+      where: { accountId: { equals: account.id }, shopId: { equals: shopId } },
+    })
+
+  return shop && membership ? shop : null
 }
 
 function membershipsForAccount(accountId: string) {
@@ -119,27 +142,91 @@ export const handlers = [
   }),
 
   http.get('/api/shops/:shopId', ({ params, cookies }) => {
-    const shopId = String(params.shopId)
-    const account = accountForSession(cookies[SESSION_COOKIE])
-    const shop = db.shop.findFirst({ where: { id: { equals: shopId } } })
-    const membership =
-      account &&
-      db.membership.findFirst({
-        where: { accountId: { equals: account.id }, shopId: { equals: shopId } },
-      })
-
-    // Not found rather than forbidden, and the same not-found whether the Shop
-    // does not exist at all or exists but this Account holds no Membership in
-    // it: a forbidden response — or a response that merely looked different —
-    // would confirm the Shop exists, leaking one tenant's existence to another.
     // This is the boundary itself, not merely the route guard's mirror of it:
     // the guard exists so the interface never asks in the first place, but the
     // data has to refuse on its own, or the guard would be the only thing
     // stopping a request sent by hand.
-    if (!shop || !membership) {
+    const shop = shopForAccount(String(params.shopId), cookies)
+
+    if (!shop) {
       return new HttpResponse(null, { status: 404 })
     }
 
     return HttpResponse.json(shopSchema.parse(shop))
+  }),
+
+  http.get('/api/shops/:shopId/barbers', ({ params, cookies }) => {
+    const shopId = String(params.shopId)
+
+    if (!shopForAccount(shopId, cookies)) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const barbers = db.barber.findMany({ where: { shopId: { equals: shopId } } })
+
+    return HttpResponse.json(barbers.map((barber) => barberSchema.parse(barber)))
+  }),
+
+  http.get('/api/shops/:shopId/services', ({ params, cookies }) => {
+    const shopId = String(params.shopId)
+
+    if (!shopForAccount(shopId, cookies)) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const services = db.service.findMany({ where: { shopId: { equals: shopId } } })
+
+    return HttpResponse.json(services.map((service) => serviceSchema.parse(service)))
+  }),
+
+  // Read-only for now: ticket #7 adds search and creation. A Customer never
+  // carries an email it does not have — `nullable(String)`'s `null` is
+  // dropped here rather than sent as a literal `null`, so the wire matches
+  // `customerSchema`'s `.optional()` exactly.
+  http.get('/api/shops/:shopId/customers', ({ params, cookies }) => {
+    const shopId = String(params.shopId)
+
+    if (!shopForAccount(shopId, cookies)) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const customers = db.customer.findMany({ where: { shopId: { equals: shopId } } })
+
+    return HttpResponse.json(
+      customers.map((customer) =>
+        customerSchema.parse({ ...customer, email: customer.email ?? undefined }),
+      ),
+    )
+  }),
+
+  // Every Barber's Appointments for a date range in one request, per ticket
+  // #6 — never one request per Barber. `from`/`to` are UTC instants: the day
+  // view is what converts a Shop-local calendar day into this range, per
+  // ADR-0002.
+  http.get('/api/shops/:shopId/appointments', ({ params, cookies, request }) => {
+    const shopId = String(params.shopId)
+
+    if (!shopForAccount(shopId, cookies)) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const url = new URL(request.url)
+    const range = appointmentRangeSchema.safeParse({
+      from: url.searchParams.get('from'),
+      to: url.searchParams.get('to'),
+    })
+
+    if (!range.success) {
+      return new HttpResponse(null, { status: 400 })
+    }
+
+    const appointments = db.appointment.findMany({
+      where: {
+        shopId: { equals: shopId },
+        start: { gte: range.data.from, lt: range.data.to },
+      },
+    })
+
+    return HttpResponse.json(appointments.map((appointment) => appointmentSchema.parse(appointment)))
   }),
 ]

@@ -1,4 +1,4 @@
-import { factory, primaryKey } from '@mswjs/data'
+import { factory, nullable, primaryKey } from '@mswjs/data'
 
 /**
  * The mock API's store. Per ADR-0003 there is no database and no ORM — this
@@ -33,5 +33,41 @@ export const db = factory({
     accountId: String,
     shopId: String,
     role: String,
+  },
+  barber: {
+    id: primaryKey(String),
+    shopId: String,
+    name: String,
+  },
+  service: {
+    id: primaryKey(String),
+    shopId: String,
+    name: String,
+    durationMinutes: Number,
+  },
+  // Scoped to one Shop and never shared, per ADR-0001 — there is no field
+  // linking a Customer row to another Shop's, by design.
+  customer: {
+    id: primaryKey(String),
+    shopId: String,
+    name: String,
+    phone: String,
+    // Absent rather than empty: the handler maps `null` to an omitted field,
+    // so `customerSchema`'s `.optional()` and the store's column agree about
+    // what "no email on file" means.
+    email: nullable(String),
+  },
+  appointment: {
+    id: primaryKey(String),
+    shopId: String,
+    barberId: String,
+    customerId: String,
+    serviceId: String,
+    // Stored as an ISO string rather than a `Date`: this is the value that
+    // crosses the wire unchanged, and keeping the store's shape the same as
+    // the contract's is what lets the handler serialise it with a plain spread
+    // rather than a conversion that could disagree with `appointmentSchema`.
+    start: String,
+    status: String,
   },
 })
