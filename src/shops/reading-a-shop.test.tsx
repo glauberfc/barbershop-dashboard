@@ -1,9 +1,18 @@
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
+import { seedAccounts } from '@/mock/seed'
 import { renderApp } from '@/test/render-app'
+import { signInOverTheApi } from '@/test/sign-in'
+
+const [account] = seedAccounts
 
 describe('reading a Shop', () => {
+  // A Shop sits behind the authentication guard, so every test here is about
+  // what a signed-in Account sees. Being turned away signed out is ticket #4's
+  // subject, not this file's.
+  beforeEach(() => signInOverTheApi(account))
+
   it("shows the Shop's name", async () => {
     renderApp('/shops/the-fade-room')
 

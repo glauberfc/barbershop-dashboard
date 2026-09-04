@@ -4,7 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { shopQueryOptions } from '@/shops/queries'
 
-export const Route = createFileRoute('/shops/$shopId')({
+export const Route = createFileRoute('/_authenticated/shops/$shopId')({
   component: ShopPage,
 })
 

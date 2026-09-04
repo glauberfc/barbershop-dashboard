@@ -7,9 +7,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { credentialsSchema } from '@/contract/session'
+import { NO_INTENDED_DESTINATION, readIntendedDestination } from '@/session/intended-destination'
 import { signInFailureMessage, useSignIn } from '@/session/queries'
 
 export const Route = createFileRoute('/login')({
+  // The address is the only thing that remembers where the Account was going,
+  // and it is read here rather than trusted: a destination this application
+  // will not send anyone to is replaced by nothing at all.
+  //
+  // The key is always named, and named as `undefined` when there is no
+  // destination. A route inherits the search its parents parsed and merges its
+  // own validation on top, so returning an object without the key would leave
+  // the raw, unvetted value the address carried standing underneath — which is
+  // precisely the value this is here to refuse.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: readIntendedDestination(search),
+  }),
   component: LoginPage,
 })
 
@@ -17,6 +30,7 @@ type FieldErrors = Partial<Record<'email' | 'password', string[]>>
 
 function LoginPage() {
   const navigate = useNavigate()
+  const { redirect } = Route.useSearch()
   const signIn = useSignIn()
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
 
@@ -42,7 +56,11 @@ function LoginPage() {
 
     setFieldErrors({})
     signIn.mutate(credentials.data, {
-      onSuccess: () => navigate({ to: '/' }),
+      // By the time this runs the session is in the cache, so the guard on the
+      // way to the destination finds an answer waiting and asks nothing of the
+      // API. Somewhere sensible when nothing was asked for: the root, which
+      // decides which Shop this Account belongs at.
+      onSuccess: () => navigate({ to: redirect ?? NO_INTENDED_DESTINATION }),
     })
   }
 

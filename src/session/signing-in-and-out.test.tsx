@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { server } from '@/mock/server'
 import { seedAccounts } from '@/mock/seed'
 import { renderApp } from '@/test/render-app'
+import { signInThroughTheForm as signIn } from '@/test/sign-in'
 
 const [account] = seedAccounts
 
@@ -34,22 +35,6 @@ function holdSessionRead(answer: () => Response) {
     // it would have written to the cache to have been written.
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
-}
-
-/**
- * Drives the login form the way an Account would: no credential is ever handed
- * to the application other than through the fields on screen.
- */
-async function signIn(email: string, password: string) {
-  const user = userEvent.setup()
-
-  if (email) {
-    await user.type(await screen.findByLabelText('Email'), email)
-  }
-  if (password) {
-    await user.type(await screen.findByLabelText('Password'), password)
-  }
-  await user.click(screen.getByRole('button', { name: 'Sign in' }))
 }
 
 describe('signing in and out', () => {
@@ -200,11 +185,13 @@ describe('signing in and out', () => {
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeVisible()
     expect(screen.queryByText(`Signed in as ${account.email}`)).not.toBeInTheDocument()
 
-    // The session ended at the API, not merely in this tab's cache.
+    // The session ended at the API, not merely in this tab's cache: a fresh
+    // load asking for a protected route is turned away by the guard, which can
+    // only be answering from what the API says.
     first.unmount()
     renderApp('/shops/the-fade-room')
 
-    expect(await screen.findByRole('heading', { name: 'The Fade Room' })).toBeVisible()
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeVisible()
     expect(screen.queryByText(`Signed in as ${account.email}`)).not.toBeInTheDocument()
   })
 })
