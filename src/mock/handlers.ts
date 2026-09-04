@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 
+import { membershipSchema } from '@/contract/membership'
 import { accountSchema, credentialsSchema, sessionSchema } from '@/contract/session'
 import { shopSchema } from '@/contract/shop'
 import { db } from './db'
@@ -33,6 +34,19 @@ function accountForSession(token: string | undefined) {
   }
 
   return db.account.findFirst({ where: { id: { equals: session.accountId } } })
+}
+
+function membershipsForAccount(accountId: string) {
+  return db.membership
+    .findMany({ where: { accountId: { equals: accountId } } })
+    .map((membership) => membershipSchema.parse(membership))
+}
+
+function sessionFor(account: { id: string; email: string }) {
+  return sessionSchema.parse({
+    account: accountSchema.parse(account),
+    memberships: membershipsForAccount(account.id),
+  })
 }
 
 /**
@@ -72,7 +86,7 @@ export const handlers = [
 
     // `accountSchema` names no password, and `z.object` drops what it does not
     // name, so the stored password cannot leave through this response.
-    return HttpResponse.json(sessionSchema.parse({ account: accountSchema.parse(account) }), {
+    return HttpResponse.json(sessionFor(account), {
       headers: { 'Set-Cookie': sessionCookie(token) },
     })
   }),
@@ -86,7 +100,7 @@ export const handlers = [
       return new HttpResponse(null, { status: 401 })
     }
 
-    return HttpResponse.json(sessionSchema.parse({ account: accountSchema.parse(account) }))
+    return HttpResponse.json(sessionFor(account))
   }),
 
   // Signing out. Idempotent: someone whose session already ended should be able
@@ -104,14 +118,25 @@ export const handlers = [
     })
   }),
 
-  http.get('/api/shops/:shopId', ({ params }) => {
-    const shop = db.shop.findFirst({
-      where: { id: { equals: String(params.shopId) } },
-    })
+  http.get('/api/shops/:shopId', ({ params, cookies }) => {
+    const shopId = String(params.shopId)
+    const account = accountForSession(cookies[SESSION_COOKIE])
+    const shop = db.shop.findFirst({ where: { id: { equals: shopId } } })
+    const membership =
+      account &&
+      db.membership.findFirst({
+        where: { accountId: { equals: account.id }, shopId: { equals: shopId } },
+      })
 
-    // Not found rather than forbidden: a forbidden response would confirm the
-    // Shop exists, leaking one tenant's existence to another.
-    if (!shop) {
+    // Not found rather than forbidden, and the same not-found whether the Shop
+    // does not exist at all or exists but this Account holds no Membership in
+    // it: a forbidden response — or a response that merely looked different —
+    // would confirm the Shop exists, leaking one tenant's existence to another.
+    // This is the boundary itself, not merely the route guard's mirror of it:
+    // the guard exists so the interface never asks in the first place, but the
+    // data has to refuse on its own, or the guard would be the only thing
+    // stopping a request sent by hand.
+    if (!shop || !membership) {
       return new HttpResponse(null, { status: 404 })
     }
 

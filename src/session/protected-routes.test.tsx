@@ -4,11 +4,19 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { server } from '@/mock/server'
-import { seedAccounts } from '@/mock/seed'
+import { seedAccounts, seedMemberships } from '@/mock/seed'
 import { renderApp } from '@/test/render-app'
 import { signInOverTheApi, signInThroughTheForm } from '@/test/sign-in'
 
-const [account] = seedAccounts
+// Ana holds a Membership in both Shops. Most of this file is about the
+// authentication guard, not the tenant one, and the redirect it exercises
+// names a Shop directly — which Shop that Account can also reach some other
+// way is beside the point everywhere except the one test that isn't.
+const [account, singleMembershipAccount] = seedAccounts
+const membershipsFor = (accountId: string) =>
+  seedMemberships
+    .filter((membership) => membership.accountId === accountId)
+    .map(({ shopId, role }) => ({ shopId, role }))
 
 /** The address of a protected route, and the heading only it renders. */
 const protectedPath = '/shops/the-fade-room'
@@ -101,13 +109,33 @@ describe('protected routes', () => {
     expect(router.state.location.pathname).toBe(protectedPath)
   })
 
-  it('lands somewhere sensible when signing in with no intended destination', async () => {
+  it('takes an Account holding exactly one Membership straight to that Shop, unasked', async () => {
+    const { router } = renderApp('/login')
+
+    await signInThroughTheForm(singleMembershipAccount.email, singleMembershipAccount.password)
+
+    expect(await screen.findByRole('heading', { name: 'North Lane Barbers' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/shops/north-lane-barbers')
+  })
+
+  it('asks an Account holding several Memberships to choose, rather than guessing', async () => {
     const { router } = renderApp('/login')
 
     await signInThroughTheForm(account.email, account.password)
 
-    expect(await screen.findByRole('heading', { name: protectedHeading })).toBeVisible()
-    expect(router.state.location.pathname).not.toBe('/login')
+    expect(await screen.findByRole('heading', { name: 'Choose a Shop' })).toBeVisible()
+    expect(router.state.location.pathname).toBe('/')
+
+    // Its own Shops, not a route it merely landed on: choosing one is what
+    // proves this is the switch, not a dead end.
+    expect(screen.getByRole('link', { name: 'The Fade Room' })).toHaveAttribute(
+      'href',
+      '/shops/the-fade-room',
+    )
+    expect(screen.getByRole('link', { name: 'North Lane Barbers' })).toHaveAttribute(
+      'href',
+      '/shops/north-lane-barbers',
+    )
   })
 
   it('never paints protected content before redirecting', async () => {
@@ -152,6 +180,12 @@ describe('protected routes', () => {
   })
 
   it('neither lets anyone through nor claims they are signed out when it cannot tell', async () => {
+    // A real session, so that the Shop this test asks for is one the mock will
+    // actually serve once the guard below lets the match through — only how
+    // that guard's own read of `GET /api/session` answers is faked, to force
+    // the ambiguous status this test is about.
+    await signInOverTheApi(account)
+
     // A refusal that is not a 401 means neither "signed out" nor "ask again",
     // and the guard has to keep it apart from both: the login form would tell
     // an Account it is signed out on no evidence, and the Shop would be
@@ -160,7 +194,10 @@ describe('protected routes', () => {
     server.use(
       http.get('/api/session', () =>
         readable
-          ? HttpResponse.json({ account: { id: account.id, email: account.email } })
+          ? HttpResponse.json({
+              account: { id: account.id, email: account.email },
+              memberships: membershipsFor(account.id),
+            })
           : new HttpResponse(null, { status: 403 }),
       ),
     )
@@ -188,15 +225,16 @@ describe('protected routes', () => {
     await screen.findByRole('heading', { name: 'Sign in' })
 
     // The refusal is asserted where it happens rather than by where signing in
-    // lands, because today the fallback destination and the Shop are the same
-    // place — landing there would prove nothing, and would go on proving
-    // nothing after ticket #5 changes what the fallback resolves to.
+    // lands: the fallback destination now depends on how many Memberships the
+    // Account holds, which is a different thing this test is not about.
     expect(acceptedDestination(offSite.router)).toBeUndefined()
 
     await signInThroughTheForm(account.email, account.password)
 
-    expect(await screen.findByRole('heading', { name: protectedHeading })).toBeVisible()
-    expect(offSite.router.state.location.pathname).toBe(protectedPath)
+    // Landed inside the application, on the fallback route — not on evil.test,
+    // and not stuck on the login form it just signed in from.
+    expect(await screen.findByRole('heading', { name: 'Choose a Shop' })).toBeVisible()
+    expect(offSite.router.state.location.pathname).toBe('/')
 
     offSite.unmount()
 
