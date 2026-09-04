@@ -1,11 +1,13 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 /**
- * Scaffolding, so that a fresh clone lands somewhere real. The address is
- * written out rather than imported from the seed, so that no application code
- * depends on the mock. Ticket #4 replaces this with the authentication guard,
- * and ticket #5 with the Membership lookup that decides which Shop an Account
- * is taken to.
+ * Where an Account lands when it asked for nothing in particular. Scaffolding:
+ * the address is written out rather than imported from the seed, so that no
+ * application code depends on the mock, and ticket #5 replaces it with the
+ * Membership lookup that decides which Shop an Account is actually taken to.
+ *
+ * Unprotected, and it needs no guard of its own: it holds nothing, and the
+ * route it hands over to is behind the guard.
  */
 export const Route = createFileRoute('/')({
   beforeLoad: () => {
