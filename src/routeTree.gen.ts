@@ -9,16 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedShopsShopIdRouteImport } from './routes/_authenticated.shops.$shopId'
+import { Route as AuthenticatedShopsShopIdIndexRouteImport } from './routes/_authenticated.shops.$shopId.index'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -28,58 +24,64 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedShopsShopIdRoute =
   AuthenticatedShopsShopIdRouteImport.update({
     id: '/shops/$shopId',
     path: '/shops/$shopId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedShopsShopIdIndexRoute =
+  AuthenticatedShopsShopIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedShopsShopIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AuthenticatedIndexRoute
   '/login': typeof LoginRoute
-  '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/shops/$shopId': typeof AuthenticatedShopsShopIdRouteWithChildren
+  '/shops/$shopId/': typeof AuthenticatedShopsShopIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/': typeof AuthenticatedIndexRoute
+  '/shops/$shopId': typeof AuthenticatedShopsShopIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
-  '/_authenticated/shops/$shopId': typeof AuthenticatedShopsShopIdRoute
+  '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/shops/$shopId': typeof AuthenticatedShopsShopIdRouteWithChildren
+  '/_authenticated/shops/$shopId/': typeof AuthenticatedShopsShopIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/shops/$shopId'
+  fullPaths: '/' | '/login' | '/shops/$shopId' | '/shops/$shopId/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/shops/$shopId'
+  to: '/login' | '/' | '/shops/$shopId'
   id:
     | '__root__'
-    | '/'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/'
     | '/_authenticated/shops/$shopId'
+    | '/_authenticated/shops/$shopId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -94,6 +96,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/shops/$shopId': {
       id: '/_authenticated/shops/$shopId'
       path: '/shops/$shopId'
@@ -101,15 +110,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedShopsShopIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/shops/$shopId/': {
+      id: '/_authenticated/shops/$shopId/'
+      path: '/'
+      fullPath: '/shops/$shopId/'
+      preLoaderRoute: typeof AuthenticatedShopsShopIdIndexRouteImport
+      parentRoute: typeof AuthenticatedShopsShopIdRoute
+    }
   }
 }
 
+interface AuthenticatedShopsShopIdRouteChildren {
+  AuthenticatedShopsShopIdIndexRoute: typeof AuthenticatedShopsShopIdIndexRoute
+}
+
+const AuthenticatedShopsShopIdRouteChildren: AuthenticatedShopsShopIdRouteChildren =
+  {
+    AuthenticatedShopsShopIdIndexRoute: AuthenticatedShopsShopIdIndexRoute,
+  }
+
+const AuthenticatedShopsShopIdRouteWithChildren =
+  AuthenticatedShopsShopIdRoute._addFileChildren(
+    AuthenticatedShopsShopIdRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
-  AuthenticatedShopsShopIdRoute: typeof AuthenticatedShopsShopIdRoute
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedShopsShopIdRoute: typeof AuthenticatedShopsShopIdRouteWithChildren
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedShopsShopIdRoute: AuthenticatedShopsShopIdRoute,
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedShopsShopIdRoute: AuthenticatedShopsShopIdRouteWithChildren,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
@@ -117,7 +149,6 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
 }

@@ -14,14 +14,37 @@ export const seedShops = [
 ] as const
 
 /**
- * The Accounts that exist from the outset. Two, because ticket #5 needs one
- * Account holding Memberships at two Shops and one holding a single
- * Membership, and because a test that signs in has to be able to name an
- * Account that is not the only one in the store.
+ * The Accounts that exist from the outset. Two, because a test that signs in
+ * has to be able to name an Account that is not the only one in the store, and
+ * because the Memberships below need one holding several and one holding a
+ * single one.
  */
 export const seedAccounts = [
   { id: 'account-ana', email: 'ana@thefaderoom.test', password: 'fade-room-owner' },
   { id: 'account-bruno', email: 'bruno@northlane.test', password: 'north-lane-barber' },
+] as const
+
+/**
+ * The tenant boundary's fixture. Ana is an Owner holding a Membership in both
+ * Shops, which is what makes the Shop switcher testable at all. Bruno holds
+ * exactly one, at North Lane only — the Fade Room does not exist to him, which
+ * is what proves the boundary denies rather than merely not offering a link to
+ * cross it.
+ */
+export const seedMemberships = [
+  { id: 'membership-ana-the-fade-room', accountId: 'account-ana', shopId: 'the-fade-room', role: 'owner' },
+  {
+    id: 'membership-ana-north-lane-barbers',
+    accountId: 'account-ana',
+    shopId: 'north-lane-barbers',
+    role: 'owner',
+  },
+  {
+    id: 'membership-bruno-north-lane-barbers',
+    accountId: 'account-bruno',
+    shopId: 'north-lane-barbers',
+    role: 'barber',
+  },
 ] as const
 
 /**
@@ -56,5 +79,9 @@ export function seedDb(): void {
   for (const account of seedAccounts) {
     db.account.create(account)
     db.session.create({ token: sessionTokenFor(account.id), accountId: account.id })
+  }
+
+  for (const membership of seedMemberships) {
+    db.membership.create(membership)
   }
 }

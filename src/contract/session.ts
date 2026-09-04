@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { membershipSchema } from './membership'
+
 /**
  * What an Account offers to prove who it is. Per ADR-0003 this schema is
  * parsed in two places — the login form before it submits, and the handler
@@ -36,11 +38,12 @@ export type Account = z.infer<typeof accountSchema>
 
 /**
  * What `GET /api/session` returns for a signed-in Account. An object rather
- * than the bare Account, so that ticket #5 can add the Memberships the session
- * carries without changing the shape of what already exists.
+ * than the bare Account, so that the Memberships it carries sit alongside it
+ * without changing the shape of what already exists.
  */
 export const sessionSchema = z.object({
   account: accountSchema,
+  memberships: z.array(membershipSchema),
 })
 
 export type Session = z.infer<typeof sessionSchema>

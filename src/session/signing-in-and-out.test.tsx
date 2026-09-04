@@ -4,11 +4,14 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 
 import { server } from '@/mock/server'
-import { seedAccounts } from '@/mock/seed'
+import { seedAccounts, seedMemberships } from '@/mock/seed'
 import { renderApp } from '@/test/render-app'
 import { signInThroughTheForm as signIn } from '@/test/sign-in'
 
 const [account] = seedAccounts
+const memberships = seedMemberships
+  .filter((membership) => membership.accountId === account.id)
+  .map(({ shopId, role }) => ({ shopId, role }))
 
 /**
  * Holds `GET /api/session` open until it is released, so that a test can put a
@@ -128,7 +131,7 @@ describe('signing in and out', () => {
     // A read sent while the session was still valid, and so answered with the
     // Account, however long it takes to arrive.
     const landStaleRead = holdSessionRead(() =>
-      HttpResponse.json({ account: { id: account.id, email: account.email } }),
+      HttpResponse.json({ account: { id: account.id, email: account.email }, memberships }),
     )
     const user = userEvent.setup()
 

@@ -26,4 +26,12 @@ export const db = factory({
     token: primaryKey(String),
     accountId: String,
   },
+  // The tenant boundary. An Account with no row here for a Shop holds no
+  // Membership in it, and per the contract that Shop does not exist to them.
+  membership: {
+    id: primaryKey(String),
+    accountId: String,
+    shopId: String,
+    role: String,
+  },
 })
