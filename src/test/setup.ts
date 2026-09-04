@@ -14,11 +14,32 @@ beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' })
 })
 
-beforeEach(() => seedDb())
+/**
+ * Each test starts as a fresh browser would: an empty cookie jar and a freshly
+ * seeded store.
+ *
+ * Emptying the jar has to go through the API. MSW keeps response cookies in a
+ * store of its own, built once from `localStorage` and never rebuilt, so
+ * clearing `document.cookie` leaves the session behind and the next test starts
+ * signed in as whoever the last one was. The only thing that removes a cookie
+ * from that store is a response expiring it, which is precisely what signing
+ * out does.
+ */
+beforeEach(async () => {
+  await fetch(new URL('/api/session', window.location.origin), {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+
+  seedDb()
+})
 
 afterEach(() => {
   cleanup()
   server.resetHandlers()
+  // Listeners a test attached to watch traffic, dropped with the handlers it
+  // overrode, so that one test cannot observe the next one's requests.
+  server.events.removeAllListeners()
 })
 
 afterAll(() => server.close())

@@ -11,4 +11,19 @@ export const db = factory({
     name: String,
     timezone: String,
   },
+  account: {
+    id: primaryKey(String),
+    email: String,
+    // Stored in the clear because this store is a fixture, not a database. The
+    // real backend will hash; nothing here should be read as a suggestion that
+    // it should not. No contract schema names this field, so it cannot be
+    // serialised out of the mock — see src/contract/session.ts.
+    password: String,
+  },
+  // A session is a row, not a claim inside a token: signing out deletes it,
+  // and the cookie the browser holds is an opaque key to it and nothing more.
+  session: {
+    token: primaryKey(String),
+    accountId: String,
+  },
 })
