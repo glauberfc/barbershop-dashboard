@@ -1,17 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
+import { z } from 'zod'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { todayInShop } from '@/scheduling/day-range'
+import { DayView } from '@/scheduling/day-view'
 import { shopQueryOptions } from '@/shops/queries'
 import { sessionQueryOptions } from '@/session/queries'
 import { ShopSwitcher } from '@/tenancy/shop-switcher'
 
 export const Route = createFileRoute('/_authenticated/shops/$shopId/')({
+  // A plain calendar date (`yyyy-MM-dd`), not a default: the Shop's own
+  // timezone is what "today" means here, per ADR-0002, and that is not known
+  // until the Shop itself has loaded — so absence is resolved by the day view
+  // once it knows which Shop it is showing, not by this schema.
+  validateSearch: z.object({ date: z.iso.date().optional() }),
   component: ShopPage,
 })
 
 function ShopPage() {
   const { shopId } = Route.useParams()
+  const { date } = Route.useSearch()
+  const navigate = Route.useNavigate()
   const shop = useQuery(shopQueryOptions(shopId))
   // Already in the cache: the tenant guard this route sits beneath just read
   // it to let this Shop through. `refetchOnMount` is turned off because this
@@ -21,7 +31,7 @@ function ShopPage() {
   const session = useQuery({ ...sessionQueryOptions(), refetchOnMount: false })
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-8">
+    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-8">
       {session.data ? <ShopSwitcher session={session.data} currentShopId={shopId} /> : null}
 
       {shop.status === 'pending' ? <p>Loading the Shop…</p> : null}
@@ -40,16 +50,25 @@ function ShopPage() {
       ) : null}
 
       {shop.status === 'success' ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              <h1>{shop.data.name}</h1>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">All times shown in {shop.data.timezone}.</p>
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <h1>{shop.data.name}</h1>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">All times shown in {shop.data.timezone}.</p>
+            </CardContent>
+          </Card>
+
+          <DayView
+            shopId={shopId}
+            shopTimezone={shop.data.timezone}
+            date={date ?? todayInShop(shop.data.timezone)}
+            onNavigate={(nextDate) => navigate({ search: (prev) => ({ ...prev, date: nextDate }) })}
+          />
+        </>
       ) : null}
     </main>
   )
