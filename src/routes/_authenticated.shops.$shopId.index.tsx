@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { z } from 'zod'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,6 +33,14 @@ function ShopPage() {
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-8">
       {session.data ? <ShopSwitcher session={session.data} currentShopId={shopId} /> : null}
+
+      <Link
+        to="/shops/$shopId/customers"
+        params={{ shopId }}
+        className="self-start text-sm underline underline-offset-4"
+      >
+        Customers
+      </Link>
 
       {shop.status === 'pending' ? <p>Loading the Shop…</p> : null}
 

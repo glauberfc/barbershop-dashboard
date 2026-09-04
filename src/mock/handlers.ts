@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 
 import { appointmentRangeSchema, appointmentSchema } from '@/contract/appointment'
 import { barberSchema } from '@/contract/barber'
-import { customerSchema } from '@/contract/customer'
+import { createCustomerSchema, customerSchema } from '@/contract/customer'
 import { membershipSchema } from '@/contract/membership'
 import { serviceSchema } from '@/contract/service'
 import { accountSchema, credentialsSchema, sessionSchema } from '@/contract/session'
@@ -179,23 +179,59 @@ export const handlers = [
     return HttpResponse.json(services.map((service) => serviceSchema.parse(service)))
   }),
 
-  // Read-only for now: ticket #7 adds search and creation. A Customer never
-  // carries an email it does not have — `nullable(String)`'s `null` is
+  // Searched by name with `?q=`, per ticket #7. Matched case-insensitively and
+  // in the handler rather than through a store query, since `@mswjs/data`'s
+  // `contains` is case-sensitive and this Shop's Customers are few enough that
+  // filtering them in memory costs nothing worth a cleverer query. A Customer
+  // never carries an email it does not have — `nullable(String)`'s `null` is
   // dropped here rather than sent as a literal `null`, so the wire matches
   // `customerSchema`'s `.optional()` exactly.
-  http.get('/api/shops/:shopId/customers', ({ params, cookies }) => {
+  http.get('/api/shops/:shopId/customers', ({ params, cookies, request }) => {
     const shopId = String(params.shopId)
 
     if (!shopForAccount(shopId, cookies)) {
       return new HttpResponse(null, { status: 404 })
     }
 
-    const customers = db.customer.findMany({ where: { shopId: { equals: shopId } } })
+    const query = new URL(request.url).searchParams.get('q')?.trim().toLowerCase()
+
+    const customers = db.customer
+      .findMany({ where: { shopId: { equals: shopId } } })
+      .filter((customer) => !query || customer.name.toLowerCase().includes(query))
 
     return HttpResponse.json(
       customers.map((customer) =>
         customerSchema.parse({ ...customer, email: customer.email ?? undefined }),
       ),
+    )
+  }),
+
+  // Creating a Customer, per ticket #7. No Account is created or required, per
+  // ADR-0001 — a Customer is only ever this Shop's own record of a person.
+  http.post('/api/shops/:shopId/customers', async ({ params, cookies, request }) => {
+    const shopId = String(params.shopId)
+
+    if (!shopForAccount(shopId, cookies)) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const body = createCustomerSchema.safeParse(await request.json())
+
+    if (!body.success) {
+      return new HttpResponse(null, { status: 400 })
+    }
+
+    const customer = db.customer.create({
+      id: `customer-${crypto.randomUUID()}`,
+      shopId,
+      name: body.data.name,
+      phone: body.data.phone,
+      email: body.data.email ?? null,
+    })
+
+    return HttpResponse.json(
+      customerSchema.parse({ ...customer, email: customer.email ?? undefined }),
+      { status: 201 },
     )
   }),
 
