@@ -9,13 +9,16 @@ see ADR-0003.
 
 `public/mockServiceWorker.js` is committed and is kept in step with the installed
 `msw` version by that package's own postinstall hook, via the `msw.workerDirectory`
-field in `package.json`. Don't edit it by hand.
+field in `package.json`. Don't edit it by hand. pnpm does not run a dependency's
+install scripts unless told to, so `msw` is listed under `allowBuilds` in
+`pnpm-workspace.yaml`; without that entry the worker quietly stops being updated
+and drifts out of step with the `msw` the application imports.
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173
-npm test           # Vitest and Testing Library
-npm run typecheck
+pnpm install
+pnpm dev           # http://localhost:5173
+pnpm test          # Vitest and Testing Library
+pnpm typecheck
 ```
 
 ## Layout
